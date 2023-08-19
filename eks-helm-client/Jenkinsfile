@@ -1,0 +1,43 @@
+pipeline {
+
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3', daysToKeepStr: '3'))
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    environment {
+        // Below variables are used by EKS client
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-key')
+        REGION_CODE = "<your-region-code>"
+        CLUSTER_NAME = "<your-cluster-name>"
+    }
+
+    stages {
+
+        stage('Deploy Helm Chart') {
+            agent {
+                docker {
+                    image 'projectoss/eks-helm-client:latest'
+                }
+            }
+            steps {
+                sh 'aws eks update-kubeconfig --name $CLUSTER_NAME --region $REGION_CODE'
+                sh 'helm repo add bitnami https://charts.bitnami.com/bitnami'
+                sh 'helm repo update'
+                sh 'helm install bitnami/mysql --generate-name'
+            }
+        }
+
+    }
+
+    post {
+        cleanup {
+            cleanWs(cleanWhenFailure: false)
+        }
+    }
+    
+}
